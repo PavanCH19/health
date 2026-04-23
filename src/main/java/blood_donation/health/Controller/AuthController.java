@@ -1,7 +1,9 @@
 package blood_donation.health.Controller;
 
-import blood_donation.health.DTO.AuthRequest;
+import blood_donation.health.DTO.LoginDto;
+import blood_donation.health.DTO.RegisterDto;
 import blood_donation.health.Utils.JwtUtil;
+import blood_donation.health.service.UserAuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,8 +22,11 @@ public class AuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private UserAuthService userAuthService;
+
     @PostMapping("/login")
-    public String login(@RequestBody AuthRequest request) {
+    public String login(@RequestBody LoginDto request) {
 
         authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -31,5 +36,10 @@ public class AuthController {
         );
 
         return jwtUtil.generateToken(request.getEmail());
+    }
+
+    @PostMapping("/register")
+    public String register(@RequestBody RegisterDto request) {
+        return userAuthService.register(request);
     }
 }

@@ -17,32 +17,41 @@ import java.io.IOException;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private JwtUtil jwtUtil;
+    private final JwtUtil jwtUtil;
+    private final UserAuthService userAuthService;
 
-    @Autowired
-    private UserAuthService userAuthService;
+    public JwtFilter(JwtUtil jwtUtil, UserAuthService userAuthService) {
+        this.jwtUtil = jwtUtil;
+        this.userAuthService = userAuthService;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
 
-        if (header == null || !header.startsWith("Bearer ")) {
+        if (header != null && header.startsWith("Bearer ")
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            String token = header.substring(7);
-            String email = jwtUtil.extractUsername(token);
+            try {
+                String token = header.substring(7);
+                String email = jwtUtil.extractUsername(token);
 
-            UserDetails user = userAuthService.loadUserByUsername(email);
+                UserDetails user = userAuthService.loadUserByUsername(email);
 
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(
-                            user, null, user.getAuthorities()
-                    );
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(
+                                user, null, user.getAuthorities()
+                        );
 
-            SecurityContextHolder.getContext().setAuthentication(auth);
+                SecurityContextHolder.getContext().setAuthentication(auth);
+
+            } catch (Exception e) {
+                // ignore invalid token
+            }
         }
 
         filterChain.doFilter(request, response);
