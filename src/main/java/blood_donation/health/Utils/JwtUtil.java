@@ -11,11 +11,10 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final String SECRET = "your-base64-encoded-256-bit-secret-key";
+    private final String SECRET = "this_is_a_very_secure_secret_key_123456";
 
     private Key getKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(SECRET);
-        return Keys.hmacShaKeyFor(keyBytes);
+        return Keys.hmacShaKeyFor(SECRET.getBytes());
     }
 
     public String generateToken(String email){

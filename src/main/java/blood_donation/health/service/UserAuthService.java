@@ -40,13 +40,12 @@ public class UserAuthService implements UserDetailsService {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new RuntimeException("User already exists");
         }
-        // 2. Create User
+
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole("ROLE_USER");
 
-        // 4. Save
         userRepository.save(user);
         return "Registered Success fully";
     }
