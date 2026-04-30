@@ -1,13 +1,15 @@
 package blood_donation.health.Entity;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "users_profile")
+@NoArgsConstructor
+@Getter
+@Setter
 public class UserProfile {
 
         @Id
@@ -15,7 +17,7 @@ public class UserProfile {
         private Long id;
 
         private String name;
-        private String phone;
+        private long phone;
         private String city;
         private String district;
         private String state;
@@ -23,4 +25,12 @@ public class UserProfile {
         @OneToOne
         @JoinColumn(name = "user_id", unique = true)
         private User user;
+
+        public UserProfile(String name, long phone, String city, String district, String state) {
+                this.name = name;
+                this.phone = phone;
+                this.city = city;
+                this.district = district;
+                this.state = state;
+        }
 }

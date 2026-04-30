@@ -1,11 +1,16 @@
 package blood_donation.health.Entity;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
+import java.util.Set;
+
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "users_auth")
 public class User {
@@ -17,9 +22,18 @@ public class User {
     private String email;
     private String password;
 
+    @ElementCollection(fetch = FetchType.EAGER)
     @Enumerated(EnumType.STRING)
-    private Role role; // ADMIN, DONOR, RECIPIENT
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role")
+    private Set<Role> roles = new HashSet<>();
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private UserProfile profile;
+
+    public User(String email, String encode, Set<Role> roles) {
+        this.email = email;
+        this.password = encode;
+        this.roles = roles;
+    }
 }
