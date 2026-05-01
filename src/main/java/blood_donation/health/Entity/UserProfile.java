@@ -25,12 +25,4 @@ public class UserProfile {
         @OneToOne
         @JoinColumn(name = "user_id", unique = true)
         private User user;
-
-        public UserProfile(String name, long phone, String city, String district, String state) {
-                this.name = name;
-                this.phone = phone;
-                this.city = city;
-                this.district = district;
-                this.state = state;
-        }
 }

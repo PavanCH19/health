@@ -14,7 +14,7 @@ public class ProfileController {
 
     private final ProfileService profileService;
 
-    @PostMapping("/complete")
+    @PostMapping("/CompleteProfile")
     public String completeProfile(@RequestBody ProfileRequestDto dto,
                                   Authentication authentication) {
 
