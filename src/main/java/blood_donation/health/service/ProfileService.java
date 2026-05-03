@@ -4,10 +4,12 @@ import blood_donation.health.DTO.ProfileRequestDto;
 import blood_donation.health.DTO.ProfileResponseDto;
 import blood_donation.health.Entity.User;
 import blood_donation.health.Entity.UserProfile;
+import blood_donation.health.Utils.UserAlreadyExistsException;
 import blood_donation.health.repository.UserProfileRepository;
 import blood_donation.health.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,10 +24,10 @@ public class ProfileService {
     public String completeProfile(ProfileRequestDto dto, String email) {
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
         if (user.getProfile() != null) {
-            throw new RuntimeException("Profile already exists for this user");
+            throw new UserAlreadyExistsException("Profile already exists for this user");
         }
 
         UserProfile profile = new UserProfile();
@@ -45,7 +47,7 @@ public class ProfileService {
     public ProfileResponseDto getMyProfile(String email) {
 
         UserProfile profile = userProfileRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Profile not found for email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("Profile not found for email: " + email));
 
         return mapEntityToDto(profile);
     }
@@ -54,12 +56,12 @@ public class ProfileService {
     public String updateProfile(ProfileRequestDto dto, String email) {
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
         UserProfile profile = user.getProfile();
 
         if (profile == null) {
-            throw new RuntimeException("Profile not found. Please complete profile first.");
+            throw new UsernameNotFoundException("Profile not found. Please complete profile first.");
         }
 
         mapDtoToEntity(dto, profile);
@@ -71,7 +73,7 @@ public class ProfileService {
     public String deleteProfile(String email) {
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
         userRepository.delete(user); // cascade will delete profile
 
@@ -104,5 +106,3 @@ public class ProfileService {
         return dto;
     }
 }
-
-//

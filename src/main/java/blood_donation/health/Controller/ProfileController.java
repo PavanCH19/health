@@ -2,8 +2,11 @@ package blood_donation.health.Controller;
 
 import blood_donation.health.DTO.ProfileRequestDto;
 import blood_donation.health.DTO.ProfileResponseDto;
+import blood_donation.health.DTO.ApiResponse;
 import blood_donation.health.service.ProfileService;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,36 +18,41 @@ public class ProfileController {
     private final ProfileService profileService;
 
     @PostMapping("/CompleteProfile")
-    public String completeProfile(@RequestBody ProfileRequestDto dto,
-                                  Authentication authentication) {
+    public ResponseEntity<ApiResponse<Void>> completeProfile(@RequestBody ProfileRequestDto dto,
+                                                             Authentication authentication) {
+        String email = authentication.getName();
+        profileService.completeProfile(dto, email);
 
-        String email = authentication.getName(); // from JWT
-
-        return profileService.completeProfile(dto, email);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.created("Profile created successfully", null));
     }
 
     @GetMapping("/me")
-    public ProfileResponseDto getMyProfile(Authentication authentication) {
-
+    public ResponseEntity<ApiResponse<ProfileResponseDto>> getMyProfile(Authentication authentication) {
         String email = authentication.getName();
+        ProfileResponseDto profile = profileService.getMyProfile(email);
 
-        return profileService.getMyProfile(email);
+        return ResponseEntity
+                .ok(ApiResponse.success("Profile fetched successfully", profile));
     }
 
     @PatchMapping("/updateProfile")
-    public String updateProfile(@RequestBody ProfileRequestDto dto,
-                                Authentication authentication) {
-
+    public ResponseEntity<ApiResponse<Void>> updateProfile(@RequestBody ProfileRequestDto dto,
+                                                           Authentication authentication) {
         String email = authentication.getName();
+        profileService.updateProfile(dto, email);
 
-        return profileService.updateProfile(dto, email);
+        return ResponseEntity
+                .ok(ApiResponse.success("Profile updated successfully", null));
     }
 
     @DeleteMapping("/deleteProfile")
-    public String deleteProfile(Authentication authentication) {
-
+    public ResponseEntity<ApiResponse<Void>> deleteProfile(Authentication authentication) {
         String email = authentication.getName();
+        profileService.deleteProfile(email);
 
-        return profileService.deleteProfile(email);
+        return ResponseEntity
+                .ok(ApiResponse.success("Profile deleted successfully", null));
     }
 }

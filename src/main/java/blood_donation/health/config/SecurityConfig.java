@@ -1,6 +1,8 @@
 package blood_donation.health.config;
 
 import blood_donation.health.Utils.JwtFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -15,6 +17,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -31,26 +37,67 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable());
+                .httpBasic(basic -> basic.disable())
+
+                // ── Exception Handling ──────────────────────────────────────
+                .exceptionHandling(ex -> ex
+
+                        // No token / expired token / invalid token
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json");
+                            response.getWriter().write(buildErrorJson(
+                                    401,
+                                    "Unauthorized",
+                                    "Authentication required. Please login and provide a valid token.",
+                                    request.getRequestURI()
+                            ));
+                        })
+
+                        // Valid token but insufficient role/permission
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.getWriter().write(buildErrorJson(
+                                    403,
+                                    "Access Denied",
+                                    "You do not have permission to access this resource.",
+                                    request.getRequestURI()
+                            ));
+                        })
+                );
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
+    // ─── Shared JSON builder ──────────────────────────────────────────────────
+    private String buildErrorJson(int status, String error, String message, String path) {
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("timestamp", LocalDateTime.now().toString());
+            body.put("status", status);
+            body.put("error", error);
+            body.put("message", message);
+            body.put("path", path);
+            return new ObjectMapper().writeValueAsString(body);
+        } catch (Exception e) {
+            // Fallback in case ObjectMapper fails
+            return "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\"}".formatted(status, error, message);
+        }
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-
         return new BCryptPasswordEncoder();
     }
 
     @Bean
     public AuthenticationProvider authenticationProvider(UserDetailsService userAuthService) {
-
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userAuthService);
         provider.setPasswordEncoder(passwordEncoder());
-
         return provider;
     }
 
@@ -59,220 +106,3 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 }
-
-
-// ==========================================================
-// [PHASE 1: APPLICATION STARTUP]
-// ==========================================================
-
-// Spring Boot starts
-//   ↓
-// Scans annotations (@Configuration, @Service, @Component)
-//   ↓
-// Creates Beans:
-//     - SecurityFilterChain
-//     - JwtFilter
-//     - UserAuthService
-//     - AuthenticationProvider (DaoAuthenticationProvider)
-//     - AuthenticationManager
-//     - PasswordEncoder
-//   ↓
-// Builds Authentication System:
-//     AuthenticationManager
-//         ↓
-//     DaoAuthenticationProvider
-//         ↓
-//     UserDetailsService (UserAuthService)
-//   ↓
-// Builds Security Filter Chain:
-//     SecurityContextPersistenceFilter
-//     ↓
-//     JwtFilter (your custom filter)
-//     ↓
-//     UsernamePasswordAuthenticationFilter
-//     ↓
-//     AuthorizationFilter
-//     ↓
-//     ExceptionTranslationFilter
-//   ↓
-// Application READY to handle requests
-
-
-// ==========================================================
-// [PHASE 2: LOGIN FLOW (AUTHENTICATION)]
-// ==========================================================
-
-// Client sends request:
-//   POST /auth/login
-//   Body: email + password
-//   ↓
-// Request reaches Controller (AuthController)
-//   ↓
-// authManager.authenticate(
-//     UsernamePasswordAuthenticationToken(email, password)
-// )
-//   ↓
-// AuthenticationManager receives request
-//   ↓
-// Delegates to AuthenticationProvider
-//   ↓
-// DaoAuthenticationProvider executes
-//   ↓
-// Calls UserAuthService.loadUserByUsername(email)
-//   ↓
-// UserAuthService:
-//     - Calls UserRepository
-//     - Fetches user from DB
-//     - Converts User → UserDetails
-//   ↓
-// Returns UserDetails to Provider
-//   ↓
-// PasswordEncoder compares:
-//     rawPassword vs hashedPassword
-//   ↓
-// IF password matches:
-//     - Authentication object created
-//     - Contains:
-//         Principal (user)
-//         Authorities (ROLE_USER / ROLE_ADMIN)
-//   ↓
-// Authentication SUCCESS
-//   ↓
-// Controller generates JWT token:
-//     jwtUtil.generateToken(email)
-//   ↓
-// JWT contains:
-//     - subject (email)
-//     - issuedAt
-//     - expiration
-//     - signature
-//   ↓
-// Token returned to client
-//   ↓
-// Client stores token (localStorage / memory)
-
-
-// ==========================================================
-// [PHASE 3: REQUEST FLOW (JWT AUTHENTICATION)]
-// ==========================================================
-
-// Client sends request:
-//   GET /admin/dashboard
-//   Header:
-//     Authorization: Bearer <JWT>
-//   ↓
-// Request enters SecurityFilterChain
-//   ↓
-// JwtFilter executes FIRST
-//   ↓
-// JwtFilter:
-//   1. Read Authorization header
-//   2. Check if header starts with "Bearer "
-//   3. Extract token
-//   4. Call jwtUtil.extractUsername(token)
-//   5. Parse JWT (verify signature + expiration)
-//   ↓
-// If token valid:
-//   ↓
-// Load user again from DB:
-//   userAuthService.loadUserByUsername(email)
-//   ↓
-// Create Authentication object:
-//   UsernamePasswordAuthenticationToken
-//   ↓
-// Set into SecurityContext:
-//   SecurityContextHolder.getContext().setAuthentication(auth)
-//   ↓
-// Continue filter chain
-
-
-// ==========================================================
-// [PHASE 4: AUTHORIZATION CHECK]
-// ==========================================================
-
-// After JwtFilter:
-//   ↓
-// AuthorizationFilter runs
-//   ↓
-// Reads:
-//   SecurityContext → Authentication → Authorities
-//   ↓
-// Matches with config rules:
-//
-//   /admin/** → hasRole("ADMIN")
-//   /user/** → hasAnyRole("USER", "ADMIN")
-//
-//   ↓
-// Decision:
-//
-//   IF role matches:
-//       → Request allowed
-//       → Controller executed
-//
-//   ELSE:
-//       → 403 Forbidden
-//
-//   IF no authentication:
-//       → 401 Unauthorized
-
-
-// ==========================================================
-// [PHASE 5: CONTROLLER EXECUTION]
-// ==========================================================
-
-// If authorized:
-//   ↓
-// Controller method runs
-//   ↓
-// Business logic executes
-//   ↓
-// Response returned to client
-
-
-// ==========================================================
-// [PHASE 6: EXCEPTION HANDLING]
-// ==========================================================
-
-// If error occurs:
-//
-// No token / invalid token:
-//   → AuthenticationEntryPoint → 401
-//
-// No permission:
-//   → AccessDeniedHandler → 403
-//
-// Token expired / invalid:
-//   → Exception handled in filter or entry point
-
-
-// ==========================================================
-// [PHASE 7: SECURITY CONTEXT LIFECYCLE]
-// ==========================================================
-
-// Per request:
-//
-// SecurityContextHolder created
-//   ↓
-// JwtFilter sets Authentication
-//   ↓
-// Used during request
-//   ↓
-// Cleared after response
-
-
-// ==========================================================
-// [FULL SYSTEM SUMMARY]
-// ==========================================================
-
-// STARTUP:
-//   Build security system
-
-// LOGIN:
-//   Authenticate user → generate JWT
-
-// REQUEST:
-//   JWT → Filter → Set Authentication → Authorization → Controller
-
-// SECURITY:
-//   Stateless (no session)
-//   Every request must carry token
