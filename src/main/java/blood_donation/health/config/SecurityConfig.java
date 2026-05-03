@@ -17,9 +17,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -29,6 +33,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ← add this
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -38,29 +43,21 @@ public class SecurityConfig {
                 )
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
-
-                // ── Exception Handling ──────────────────────────────────────
                 .exceptionHandling(ex -> ex
-
-                        // No token / expired token / invalid token
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType("application/json");
                             response.getWriter().write(buildErrorJson(
-                                    401,
-                                    "Unauthorized",
+                                    401, "Unauthorized",
                                     "Authentication required. Please login and provide a valid token.",
                                     request.getRequestURI()
                             ));
                         })
-
-                        // Valid token but insufficient role/permission
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                             response.setContentType("application/json");
                             response.getWriter().write(buildErrorJson(
-                                    403,
-                                    "Access Denied",
+                                    403, "Access Denied",
                                     "You do not have permission to access this resource.",
                                     request.getRequestURI()
                             ));
@@ -70,6 +67,35 @@ public class SecurityConfig {
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    // ─── CORS Configuration ───────────────────────────────────────────────────
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173"    // Vite dev server
+        ));
+
+        config.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+        ));
+
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept"
+        ));
+
+        config.setExposedHeaders(List.of("Authorization")); // lets frontend read the header
+
+        config.setAllowCredentials(true); // needed if frontend sends cookies / auth headers
+        config.setMaxAge(3600L);          // preflight cache duration in seconds
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);  // apply to all endpoints
+        return source;
     }
 
     // ─── Shared JSON builder ──────────────────────────────────────────────────
