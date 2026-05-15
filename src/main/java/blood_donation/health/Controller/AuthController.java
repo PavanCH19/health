@@ -24,22 +24,29 @@ import java.util.Map;
 @AllArgsConstructor
 public class AuthController {
 
-    private AuthenticationManager authManager;
-    private JwtUtil jwtUtil;
     private UserAuthService userAuthService;
+    private AuthenticationManager authenticationManager;
 
     // AuthController — only these two methods need touching
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Map<String, String>>> login(@Valid @RequestBody LoginDto request) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> login(
+            @Valid @RequestBody LoginDto request) {
 
-        authManager.authenticate(
+        // authenticate credentials
+        authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getEmail(), request.getPassword()));
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
 
-        String token = jwtUtil.generateToken(request.getEmail());
+        // generate token + role
+        Map<String, String> data =
+                userAuthService.login(request.getEmail());
 
-        return ResponseEntity
-                .ok(ApiResponse.success("Login successful", Map.of("token", token)));
+        return ResponseEntity.ok(
+                ApiResponse.success("Login successful", data)
+        );
     }
 
     @PostMapping("/register")

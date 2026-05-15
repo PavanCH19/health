@@ -4,6 +4,7 @@ import blood_donation.health.DTO.ProfileRequestDto;
 import blood_donation.health.DTO.ProfileResponseDto;
 import blood_donation.health.DTO.ApiResponse;
 import blood_donation.health.service.ProfileService;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,7 @@ public class ProfileController {
     private final ProfileService profileService;
 
     @PostMapping("/CompleteProfile")
-    public ResponseEntity<ApiResponse<Void>> completeProfile(@RequestBody ProfileRequestDto dto,
+    public ResponseEntity<ApiResponse<Void>> completeProfile(@Valid @RequestBody ProfileRequestDto dto,
                                                              Authentication authentication) {
         String email = authentication.getName();
         profileService.completeProfile(dto, email);

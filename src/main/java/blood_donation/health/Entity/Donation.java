@@ -1,8 +1,7 @@
 package blood_donation.health.Entity;
 
-import blood_donation.health.Entity.Enum.NotificationType;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -15,15 +14,15 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-        name = "notifications",
+        name = "donations",
         indexes = {
                 @Index(
-                        name = "idx_notification_read",
-                        columnList = "isRead"
+                        name = "idx_donation_date",
+                        columnList = "donationDate"
                 )
         }
 )
-public class Notification {
+public class Donation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,22 +30,26 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
-            name = "user_id",
+            name = "donor_id",
             nullable = false
     )
-    private Users user;
+    private Users donor;
 
-    @Enumerated(EnumType.STRING)
-    private NotificationType type;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "request_id")
+    private BloodRequest request;
 
-    @NotBlank(message = "Title is required")
-    private String title;
+    private String recipientName;
 
-    @Column(columnDefinition = "TEXT")
-    private String body;
+    private String hospitalName;
+
+    @Min(value = 1, message = "Units must be at least 1")
+    private int units = 1;
 
     @Column(nullable = false)
-    private boolean isRead = false;
+    private LocalDateTime donationDate;
+
+    private String certificateUrl;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

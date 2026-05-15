@@ -1,5 +1,6 @@
 package blood_donation.health.DTO;
 
+import blood_donation.health.Entity.Enum.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -13,6 +14,8 @@ public class RegisterDto {
     @Email(message = "Invalid email format")
     @NotBlank(message = "Email is required")
     private String email;
+
+    private Role role;
 
     @Size(min = 6, message = "Password must be at least 6 characters")
     @NotBlank(message = "Password is required")
