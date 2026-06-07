@@ -1,7 +1,9 @@
 package blood_donation.health.Controller;
 
 import blood_donation.health.DTO.ApiResponse;
+import blood_donation.health.DTO.DistrictDonorCountDto;
 import blood_donation.health.DTO.DonarResponseDto;
+import blood_donation.health.DTO.DonorTableDto;
 import blood_donation.health.Entity.Enum.BloodGroup;
 import blood_donation.health.service.DonarService;
 import lombok.RequiredArgsConstructor;
@@ -37,5 +39,29 @@ public class DonorSearchController {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(ApiResponse.success("Donor fetched successfully", availableDonors));
+    }
+
+    @GetMapping("/district-count")
+    public ResponseEntity<ApiResponse<List<DistrictDonorCountDto>>> getDonorCountByDistrict() {
+
+        List<DistrictDonorCountDto> data = donorService.getDonorCountByDistrict();
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "District wise donor count fetched successfully",
+                        data
+                )
+        );
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<List<DonorTableDto>>> getAllDonors() {
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Donors fetched successfully",
+                        donorService.getAllDonorsForTable()
+                )
+        );
     }
 }

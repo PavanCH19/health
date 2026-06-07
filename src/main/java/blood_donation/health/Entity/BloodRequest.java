@@ -101,5 +101,4 @@ public class BloodRequest {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDateTime updatedAt;
-
 }

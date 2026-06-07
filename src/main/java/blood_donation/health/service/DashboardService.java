@@ -65,6 +65,8 @@ public class DashboardService {
                         .getMyNotifications(email)
         );
 
+        dto.setCreatedAt(user.getCreatedAt());
+
         return dto;
     }
 

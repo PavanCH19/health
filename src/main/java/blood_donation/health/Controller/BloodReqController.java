@@ -3,6 +3,7 @@ package blood_donation.health.Controller;
 import blood_donation.health.DTO.BloodReqDto;
 import blood_donation.health.DTO.ApiResponse;
 import blood_donation.health.DTO.DonarResponseDto;
+import blood_donation.health.DTO.NearbyBloodRequestDto;
 import blood_donation.health.Entity.Enum.BloodGroup;
 import blood_donation.health.Entity.Enum.RequestStatus;
 import blood_donation.health.service.BloodRequestService;
@@ -93,5 +94,28 @@ public class BloodReqController {
         );
     }
 
+    @GetMapping("/nearby-requests")
+    public ResponseEntity<
+            ApiResponse<List<NearbyBloodRequestDto>>
+            > nearbyRequests(
 
+            @RequestParam double radiusKm,
+            Authentication authentication
+    ) {
+
+        String email = authentication.getName();
+
+        List<NearbyBloodRequestDto> requests =
+                bloodRequestService.getNearbyRequests(
+                        radiusKm,
+                        email
+                );
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Nearby blood requests fetched successfully",
+                        requests
+                )
+        );
+    }
 }

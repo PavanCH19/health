@@ -41,7 +41,7 @@ import java.time.LocalDateTime;
 public class UserProfile {
 
     @Id
-    private Long userId;
+    private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
@@ -105,8 +105,8 @@ public class UserProfile {
 
     private LocalDate lastDonationDate;
 
-    private float lat;
-    private float lon;
+    private double lat;
+    private double lon;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

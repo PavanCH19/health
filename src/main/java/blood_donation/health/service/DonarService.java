@@ -1,22 +1,22 @@
 package blood_donation.health.service;
 
+import blood_donation.health.DTO.DistrictDonorCountDto;
 import blood_donation.health.DTO.DonarResponseDto;
-import blood_donation.health.Entity.BloodRequest;
-import blood_donation.health.Entity.DonorRequestMatch;
+import blood_donation.health.DTO.DonorTableDto;
+import blood_donation.health.Entity.*;
 import blood_donation.health.Entity.Enum.BloodGroup;
-import blood_donation.health.Entity.UserProfile;
-import blood_donation.health.Entity.Users;
-import blood_donation.health.repository.BloodRequestRepository;
-import blood_donation.health.repository.DonarRequestMatchRepository;
-import blood_donation.health.repository.UserProfileRepository;
-import blood_donation.health.repository.UserRepository;
+import blood_donation.health.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Point;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class DonarService {
     private final UserProfileRepository userProfileRepository;
     private final DonarRequestMatchRepository donorRequestMatchRepository;
 
-    private final UserRepository userRepository;
+    private final HospitalProfileRepository  hospitalProfileRepository;
 
     public List<DonarResponseDto> getNearbyDonors(
             Long bloodReqId,
@@ -34,9 +34,12 @@ public class DonarService {
             String email
     ) {
 
-        Users loggedInUser = userRepository.findByEmail(email)
+        Hospital hospital = hospitalProfileRepository
+                .findByUserEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException("User not found"));
+                        new UsernameNotFoundException("Hospital not found"));
+
+        Users loggedInUser = hospital.getUser();
 
         Point searchLocation;
         BloodRequest request = null;
@@ -57,16 +60,16 @@ public class DonarService {
         // CASE 2 -> Logged-in user location search
         else {
 
-            UserProfile profile =
-                    userProfileRepository.findByUserEmail(loggedInUser.getEmail())
+            Hospital profile =
+                    hospitalProfileRepository.findByUserEmail(email)
                             .orElseThrow(() ->
                                     new UsernameNotFoundException(
-                                            "User profile not found"
+                                            "Hospital profile not found"
                                     ));
 
             if (profile.getLocation() == null) {
                 throw new RuntimeException(
-                        "User location not found"
+                        "Hospital location not found"
                 );
             }
 
@@ -129,6 +132,62 @@ public class DonarService {
                 .toList();
     }
 
+    public List<DistrictDonorCountDto> getDonorCountByDistrict() {
+
+        List<Object[]> result = userProfileRepository.getDonorCountByDistrict();
+
+        return result.stream()
+                .map(row -> new DistrictDonorCountDto(
+                        (String) row[0],
+                        (Long) row[1]
+                ))
+                .toList();
+    }
+
+    public List<DonorTableDto> getAllDonorsForTable() {
+
+        List<UserProfile> donors = userProfileRepository.getAllDonors();
+
+        return donors.stream()
+                .map(donor -> {
+
+                    String initials = Arrays.stream(donor.getFullName().split(" "))
+                            .map(word -> String.valueOf(word.charAt(0)))
+                            .collect(Collectors.joining());
+
+                    String location = donor.getCity() + ", " + donor.getState();
+
+                    String lastDonated = donor.getLastDonationDate() == null
+                            ? "Never"
+                            : getTimeAgo(donor.getLastDonationDate());
+
+                    return new DonorTableDto(
+                            initials,
+                            donor.getFullName(),
+                            donor.getBloodGroup().toString(),
+                            location,
+                            lastDonated,
+                            donor.isAvailable()
+                    );
+                })
+                .toList();
+    }
+
+    private String getTimeAgo(LocalDate donationDate) {
+
+        Period period = Period.between(donationDate, LocalDate.now());
+
+        if (period.getYears() > 0) {
+            return period.getYears() + " years ago";
+        }
+
+        if (period.getMonths() > 0) {
+            return period.getMonths() + " months ago";
+        }
+
+        return period.getDays() + " days ago";
+    }
+
     private DonarResponseDto mapToDto(UserProfile profile) {
 
         DonarResponseDto dto = new DonarResponseDto();
@@ -139,6 +198,9 @@ public class DonarService {
         dto.setCity(profile.getCity());
         dto.setDistrict(profile.getDistrict());
         dto.setState(profile.getState());
+        dto.setAvailable(profile.isAvailable());
+        dto.setLat(profile.getLat());
+        dto.setLon(profile.getLon());
 
         return dto;
     }
@@ -181,22 +243,23 @@ public class DonarService {
             Boolean available
     ) {
 
-        Users loggedInUser = userRepository.findByEmail(email)
+        Hospital hospital = hospitalProfileRepository
+                .findByUserEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found"
-                        ));
+                        new UsernameNotFoundException("Hospital not found"));
+
+        Users loggedInUser = hospital.getUser();
 
         List<UserProfile> donors;
 
         // CASE 1 -> Radius search
         if (radiusKm != null) {
 
-            UserProfile loggedInProfile =
-                    userProfileRepository.findByUserEmail(email)
+            Hospital loggedInProfile =
+            hospitalProfileRepository.findByUserEmail(email)
                             .orElseThrow(() ->
                                     new UsernameNotFoundException(
-                                            "Profile not found"
+                                            "Hospital profile not found"
                                     ));
 
             Point searchLocation =

@@ -54,6 +54,21 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, Long> 
             @Param("bloodGroup") String bloodGroup
     );
 
+    @Query("""
+            SELECT d.district, COUNT(d)
+            FROM UserProfile d
+            GROUP BY d.district
+            ORDER BY COUNT(d) DESC
+           """)
+    List<Object[]> getDonorCountByDistrict();
+
+    @Query("""
+       SELECT u
+       FROM UserProfile u
+       ORDER BY u.createdAt DESC
+       """)
+    List<UserProfile> getAllDonors();
+
     boolean existsByPhone(String phone);
     long countByAvailableTrue();
 }

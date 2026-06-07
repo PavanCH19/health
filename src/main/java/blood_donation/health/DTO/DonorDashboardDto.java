@@ -6,6 +6,7 @@ import blood_donation.health.DTO.ProfileResponseDto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -21,4 +22,6 @@ public class DonorDashboardDto {
     private DonationStatsDto donationStats;
 
     private List<NotificationDto> notifications;
+
+    private LocalDateTime createdAt;
 }

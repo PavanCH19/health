@@ -24,5 +24,9 @@ public class DonarResponseDto {
 
     private Boolean available;
 
+    private Double lat;
+
+    private Double lon;
+
 
 }

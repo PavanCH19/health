@@ -17,6 +17,6 @@ public class ProfileRequestDto {
     private String state;
     private  BloodGroup bloodGroup;
     private LocalDate birthDate;
-    private Float lat;
-    private Float lon;
+    private Double lat;
+    private Double lon;
 }

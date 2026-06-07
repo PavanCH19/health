@@ -90,7 +90,6 @@ public class HospitalService {
 
         // Auto skips null values
         patchMapper.map(dto, hospital);
-
         hospitalProfileRepository.save(hospital);
 
         return "Hospital profile updated successfully";
@@ -111,9 +110,36 @@ public class HospitalService {
                                 "Hospital profile not found"
                         ));
 
-        hospitalProfileRepository.delete(hospital);
+        // soft deactivate hospital
+        hospital.setVerifiedByAdmin(false);
 
-        return "Hospital profile deleted successfully";
+        // deactivate account
+        user.setActive(false);
+
+        hospitalProfileRepository.save(hospital);
+        userRepository.save(user);
+
+        return "Hospital account deactivated successfully";
+    }
+
+    private HospitalProfileDto mapEntityToDto(Hospital hospital) {
+
+        HospitalProfileDto dto = new HospitalProfileDto();
+
+        dto.setHospitalName(hospital.getHospitalName());
+        dto.setLicenseNumber(hospital.getLicenseNumber());
+        dto.setEmergencyContact(hospital.getEmergencyContact());
+        dto.setWebsite(hospital.getWebsite());
+
+        dto.setCity(hospital.getCity());
+        dto.setDistrict(hospital.getDistrict());
+        dto.setState(hospital.getState());
+        dto.setAddressLine(hospital.getAddressLine());
+
+        dto.setLat(hospital.getLat());
+        dto.setLon(hospital.getLon());
+
+        return dto;
     }
 
     private void mapDtoToEntity(
@@ -126,19 +152,19 @@ public class HospitalService {
         hospital.setEmergencyContact(dto.getEmergencyContact());
         hospital.setWebsite(dto.getWebsite());
 
-        // Default false until admin verification
+        hospital.setCity(dto.getCity());
+        hospital.setDistrict(dto.getDistrict());
+        hospital.setState(dto.getState());
+        hospital.setAddressLine(dto.getAddressLine());
+
+        if (dto.getLat() != null) {
+            hospital.setLat(dto.getLat());
+        }
+
+        if (dto.getLon() != null) {
+            hospital.setLon(dto.getLon());
+        }
+
         hospital.setVerifiedByAdmin(false);
-    }
-
-    private HospitalProfileDto mapEntityToDto(Hospital hospital) {
-
-        HospitalProfileDto dto = new HospitalProfileDto();
-
-        dto.setHospitalName(hospital.getHospitalName());
-        dto.setLicenseNumber(hospital.getLicenseNumber());
-        dto.setEmergencyContact(hospital.getEmergencyContact());
-        dto.setWebsite(hospital.getWebsite());
-
-        return dto;
     }
 }

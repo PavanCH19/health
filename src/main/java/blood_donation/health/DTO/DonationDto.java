@@ -1,8 +1,6 @@
 package blood_donation.health.DTO;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import blood_donation.health.Entity.Enum.BloodGroup;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,19 +10,27 @@ import java.time.LocalDateTime;
 @Setter
 public class DonationDto {
 
-    private Long donationId;
+    // COMMON
+    private Long id;
 
+    // CREATE DONATION
     private Long requestId;
 
-    @NotBlank
     private String recipientName;
 
-    @NotBlank
+    // BOTH
     private String hospitalName;
 
-    @Min(1)
     private int units;
 
-    @NotNull
     private LocalDateTime donationDate;
+
+    // RESPONSE ONLY
+    private BloodGroup bloodGroup;
+
+    private String status;
+
+    private boolean certificateAvailable;
+
+    private String certificateUrl;
 }

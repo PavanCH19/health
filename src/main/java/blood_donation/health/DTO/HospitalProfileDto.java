@@ -16,4 +16,18 @@ public class HospitalProfileDto {
     private String emergencyContact;
 
     private String website;
+
+    // LOCATION
+
+    private String city;
+
+    private String district;
+
+    private String state;
+
+    private String addressLine;
+
+    private Double lat;
+
+    private Double lon;
 }

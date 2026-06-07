@@ -79,20 +79,46 @@ public class ProfileService {
     public String updateProfile(ProfileRequestDto dto, String email) {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+                .orElseThrow(() ->
+                        new UsernameNotFoundException(
+                                "User not found: " + email
+                        )
+                );
 
         UserProfile profile = user.getProfile();
+
         if (profile == null) {
-            throw new UsernameNotFoundException("Profile not found. Please complete your profile first.");
+            throw new UsernameNotFoundException(
+                    "Profile not found. Please complete your profile first."
+            );
         }
 
-        // ModelMapper skips all null fields automatically — no if-else needed
+        // Auto-map non-null fields
         patchMapper.map(dto, profile);
 
-        // Handle location separately (PostGIS Point can't be auto-mapped)
-        updateLocationIfProvided(dto, profile);
+        // Update PostGIS location point separately
+        if (dto.getLat() != null && dto.getLon() != null) {
+
+            profile.setLat(dto.getLat());
+            profile.setLon(dto.getLon());
+
+            GeometryFactory geometryFactory = new GeometryFactory();
+
+            Point point = geometryFactory.createPoint(
+                    new Coordinate(
+                            dto.getLon(), // X = longitude
+                            dto.getLat()  // Y = latitude
+                    )
+            );
+
+            point.setSRID(4326);
+
+            profile.setLocation(point);
+        }
 
         profile.setUpdatedAt(LocalDateTime.now());
+
+        userProfileRepository.save(profile);
 
         return "Profile updated successfully";
     }
@@ -101,10 +127,16 @@ public class ProfileService {
     public String deleteProfile(String email) {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+                .orElseThrow(() ->
+                        new UsernameNotFoundException(
+                                "User not found: " + email
+                        ));
 
-        userRepository.delete(user); // cascade deletes profile
-        return "Profile deleted successfully";
+        user.setActive(false);
+
+        userRepository.save(user);
+
+        return "Profile deactivated successfully";
     }
 
     // =========================================================================
@@ -131,7 +163,7 @@ public class ProfileService {
         }
     }
 
-    private void setLocation(Float lat, Float lon, UserProfile profile) {
+    private void setLocation(Double lat, Double lon, UserProfile profile) {
         if (lat == null || lon == null) return;
         profile.setLat(lat);
         profile.setLon(lon);
@@ -142,7 +174,7 @@ public class ProfileService {
 
     private ProfileResponseDto mapEntityToDto(UserProfile profile) {
         ProfileResponseDto dto = new ProfileResponseDto();
-        dto.setId(profile.getUserId());
+        dto.setId(profile.getId());
         dto.setName(profile.getFullName());
         dto.setPhone(profile.getPhone());
         dto.setCity(profile.getCity());
@@ -152,10 +184,7 @@ public class ProfileService {
         dto.setVillage(profile.getVillage());
         dto.setBloodGroup(profile.getBloodGroup());
         dto.setBirthDate(profile.getDateOfBirth());
-
-        System.out.println(profile.getLat());
-        System.out.println(profile.getLon());
-
+        dto.setCreatedAt(profile.getCreatedAt());
         dto.setLat(profile.getLat());
         dto.setLng(profile.getLon());
         return dto;

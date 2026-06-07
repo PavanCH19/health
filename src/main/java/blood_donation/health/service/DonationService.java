@@ -62,19 +62,46 @@ public class DonationService {
                 .toList();
     }
 
-    private DonationDto mapToDto( Donation donation ) {
+    private DonationDto mapToDto(Donation donation) {
 
         DonationDto dto = new DonationDto();
-        dto.setDonationId(donation.getId());
 
+        dto.setId(donation.getId());
+
+        dto.setDonationDate(donation.getDonationDate());
+
+        dto.setHospitalName(donation.getHospitalName());
+
+        dto.setUnits(donation.getUnits());
+
+        dto.setRecipientName(
+                donation.getRecipientName()
+        );
+
+        dto.setCertificateUrl(
+                donation.getCertificateUrl()
+        );
+
+        dto.setCertificateAvailable(
+                donation.getCertificateUrl() != null &&
+                        !donation.getCertificateUrl().isBlank()
+        );
+
+        // Request related data
         if (donation.getRequest() != null) {
-            dto.setRequestId( donation.getRequest().getId() );
-        }
 
-        dto.setRecipientName( donation.getRecipientName() );
-        dto.setHospitalName( donation.getHospitalName() );
-        dto.setUnits( donation.getUnits() );
-        dto.setDonationDate( donation.getDonationDate() );
+            dto.setRequestId(
+                    donation.getRequest().getId()
+            );
+
+            dto.setBloodGroup(
+                    donation.getRequest().getBloodGroup()
+            );
+
+            dto.setStatus(
+                    donation.getRequest().getStatus().name()
+            );
+        }
 
         return dto;
     }

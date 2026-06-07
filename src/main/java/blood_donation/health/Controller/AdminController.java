@@ -6,12 +6,13 @@ import blood_donation.health.DTO.AdminUserDto;
 import blood_donation.health.service.AdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/admin")
 @RequiredArgsConstructor
 public class AdminController {
 
@@ -19,9 +20,8 @@ public class AdminController {
 
     // GET ALL USERS
     @GetMapping("/users")
-    public ResponseEntity<ApiResponse<List<AdminUserDto>>>
-    getAllUsers() {
-
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<AdminUserDto>>> getAllUsers() {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         "Users fetched successfully",
@@ -32,8 +32,8 @@ public class AdminController {
 
     // GET PENDING HOSPITALS
     @GetMapping("/hospitals/pending")
-    public ResponseEntity<ApiResponse<List<AdminHospitalDto>>>
-    getPendingHospitals() {
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<AdminHospitalDto>>> getPendingHospitals() {
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -45,8 +45,8 @@ public class AdminController {
 
     // VERIFY HOSPITAL
     @PatchMapping("/hospitals/{id}/verify")
-    public ResponseEntity<ApiResponse<String>>
-    verifyHospital(
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<String>> verifyHospital(
             @PathVariable Long id
     ) {
 
@@ -60,6 +60,7 @@ public class AdminController {
 
     // BLOCK USER
     @PatchMapping("/users/{id}/block")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>>
     blockUser(
             @PathVariable Long id
@@ -75,6 +76,7 @@ public class AdminController {
 
     // UNBLOCK USER
     @PatchMapping("/users/{id}/unblock")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<String>>
     unblockUser(
             @PathVariable Long id

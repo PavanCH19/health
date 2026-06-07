@@ -78,9 +78,7 @@ public class NotificationService {
             blood_donation.health.Entity.Enum.NotificationType type
     ) {
 
-        Notification notification =
-                new Notification();
-
+        Notification notification = new Notification();
         notification.setUser(user);
         notification.setTitle(title);
         notification.setBody(body);

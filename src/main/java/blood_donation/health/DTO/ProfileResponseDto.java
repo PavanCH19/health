@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -19,8 +20,9 @@ public class ProfileResponseDto {
     private String village;
     private BloodGroup bloodGroup;
     private LocalDate birthDate;
-    private float lat;
-    private float lng;
+    private double lat;
+    private double lng;
+    private LocalDateTime createdAt;
 }
 
 

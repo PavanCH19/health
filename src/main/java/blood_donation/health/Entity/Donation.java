@@ -35,7 +35,7 @@ public class Donation {
     )
     private Users donor;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "request_id")
     private BloodRequest request;
 

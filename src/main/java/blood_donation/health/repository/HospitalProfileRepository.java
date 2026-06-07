@@ -14,4 +14,5 @@ public interface HospitalProfileRepository extends JpaRepository<Hospital, Long>
     Optional<Hospital> findByUserEmail(String email);
 
     List<Hospital> findByVerifiedByAdminFalse();
+
 }
