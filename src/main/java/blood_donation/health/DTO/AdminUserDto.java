@@ -22,4 +22,4 @@ public class AdminUserDto {
     private boolean verified;
 
     private LocalDateTime createdAt;
-}
+}

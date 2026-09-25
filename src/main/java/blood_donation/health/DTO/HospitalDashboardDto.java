@@ -20,4 +20,4 @@ public class HospitalDashboardDto {
 
     private List<NotificationDto> notifications;
 
-}
+}

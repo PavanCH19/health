@@ -28,5 +28,11 @@ public interface NearbyBloodRequestProjection {
 
     Double getDistanceKm();
 
+    String getContactName();
+
+    String getContactPhone();
+
+    java.time.LocalDateTime getRequiredBefore();
+
     java.time.LocalDateTime getCreatedAt();
-}
+}

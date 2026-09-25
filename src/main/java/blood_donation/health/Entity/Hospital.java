@@ -69,4 +69,4 @@ public class Hospital {
 
     @Column(nullable = false)
     private boolean verifiedByAdmin = false;
-}
+}

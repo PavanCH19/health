@@ -6,7 +6,12 @@ import blood_donation.health.Entity.Hospital;
 import blood_donation.health.Entity.Users;
 import blood_donation.health.repository.HospitalProfileRepository;
 import blood_donation.health.repository.UserRepository;
+import blood_donation.health.Entity.Enum.Role;
+import blood_donation.health.Utils.BusinessRuleException;
+import blood_donation.health.Utils.ResourceNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +23,7 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final HospitalProfileRepository hospitalRepository;
+    private final BloodRequestService bloodRequestService;
 
     // GET ALL USERS
     public List<AdminUserDto> getAllUsers() {
@@ -33,13 +39,14 @@ public class AdminService {
     public List<AdminHospitalDto> getPendingHospitals() {
 
         return hospitalRepository
-                .findByVerifiedByAdminFalse()
+                .findByVerifiedByAdminFalseAndUser_ActiveTrue()
                 .stream()
                 .map(this::mapHospitalToDto)
                 .toList();
     }
 
     // VERIFY HOSPITAL
+    @Transactional
     public String verifyHospital(
             Long hospitalId
     ) {
@@ -47,7 +54,7 @@ public class AdminService {
         Hospital hospital =
                 hospitalRepository.findById(hospitalId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Hospital not found"
                                 ));
 
@@ -59,6 +66,7 @@ public class AdminService {
     }
 
     // BLOCK USER
+    @Transactional
     public String blockUser(Long userId) {
 
         Users user = userRepository.findById(userId)
@@ -67,14 +75,29 @@ public class AdminService {
                                 "User not found"
                         ));
 
+        // an admin must not lock out admins (including themselves)
+        if (user.getRoles().contains(Role.ADMIN)) {
+            throw new BusinessRuleException(
+                    HttpStatus.FORBIDDEN, "Admin accounts cannot be blocked");
+        }
+
         user.setActive(false);
 
+        // a blocked donor must disappear from search / matching
+        if (user.getProfile() != null) {
+            user.getProfile().setAvailable(false);
+        }
+
         userRepository.save(user);
+
+        // a blocked hospital must not keep requests open
+        bloodRequestService.cancelActiveRequestsOf(userId);
 
         return "User blocked successfully";
     }
 
     // UNBLOCK USER
+    @Transactional
     public String unblockUser(Long userId) {
 
         Users user = userRepository.findById(userId)
@@ -146,4 +169,4 @@ public class AdminService {
 
         return dto;
     }
-}
+}

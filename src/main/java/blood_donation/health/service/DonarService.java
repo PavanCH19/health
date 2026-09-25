@@ -3,17 +3,36 @@ package blood_donation.health.service;
 import blood_donation.health.DTO.DistrictDonorCountDto;
 import blood_donation.health.DTO.DonarResponseDto;
 import blood_donation.health.DTO.DonorTableDto;
-import blood_donation.health.Entity.*;
+import blood_donation.health.Entity.BloodRequest;
 import blood_donation.health.Entity.Enum.BloodGroup;
-import blood_donation.health.repository.*;
+import blood_donation.health.Entity.Enum.MatchStatus;
+import blood_donation.health.Entity.Enum.NotificationType;
+import blood_donation.health.Entity.Enum.RequestStatus;
+import blood_donation.health.Entity.Enum.UrgencyLevel;
+import blood_donation.health.Entity.Hospital;
+import blood_donation.health.Entity.DonorRequestMatch;
+import blood_donation.health.Entity.UserProfile;
+import blood_donation.health.Entity.Users;
+import blood_donation.health.Utils.BusinessRuleException;
+import blood_donation.health.Utils.DonationRules;
+import blood_donation.health.Utils.ResourceNotFoundException;
+import blood_donation.health.repository.BloodRequestRepository;
+import blood_donation.health.repository.DonarRequestMatchRepository;
+import blood_donation.health.repository.HospitalProfileRepository;
+import blood_donation.health.repository.UserProfileRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,111 +44,143 @@ public class DonarService {
     private final BloodRequestRepository bloodRequestRepository;
     private final UserProfileRepository userProfileRepository;
     private final DonarRequestMatchRepository donorRequestMatchRepository;
+    private final HospitalProfileRepository hospitalProfileRepository;
+    private final NotificationService notificationService;
 
-    private final HospitalProfileRepository  hospitalProfileRepository;
-
+    /**
+     * Finds donors for a blood request (or around the hospital when no request
+     * is given).
+     *
+     * For a request: only donors whose blood group is compatible, who are
+     * available, active and past the donation cooldown are returned. Each newly
+     * matched donor is recorded as NOTIFIED and receives a notification, and an
+     * OPEN request moves to MATCHING.
+     */
+    @Transactional
     public List<DonarResponseDto> getNearbyDonors(
             Long bloodReqId,
             double radiusKm,
             String email
     ) {
 
-        Hospital hospital = hospitalProfileRepository
-                .findByUserEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException("Hospital not found"));
+        DonationRules.validateRadius(radiusKm);
 
-        Users loggedInUser = hospital.getUser();
+        Hospital hospital = requireVerifiedHospital(email);
+        Users hospitalUser = hospital.getUser();
 
         Point searchLocation;
         BloodRequest request = null;
-        BloodGroup requiredBloodGroup = null;
+        List<String> donorGroups;
 
-        // CASE 1 -> Blood Request Search
         if (bloodReqId != null) {
 
             request = bloodRequestRepository.findById(bloodReqId)
                     .orElseThrow(() ->
-                            new RuntimeException("Blood request not found"));
+                            new ResourceNotFoundException("Blood request not found"));
+
+            // a hospital may only work with its own requests
+            if (!request.getRequestedBy().getId().equals(hospitalUser.getId())) {
+                throw new BusinessRuleException(HttpStatus.FORBIDDEN,
+                        "You are not allowed to find donors for this request");
+            }
+
+            if (!DonationRules.ACTIVE_REQUEST_STATUSES.contains(request.getStatus())) {
+                throw new BusinessRuleException(HttpStatus.CONFLICT,
+                        "This request is already " + request.getStatus());
+            }
+
+            if (request.getRequiredBefore() != null
+                    && request.getRequiredBefore().isBefore(LocalDateTime.now())) {
+                throw new BusinessRuleException(HttpStatus.CONFLICT,
+                        "This request has expired");
+            }
 
             searchLocation = request.getLocation();
 
-            requiredBloodGroup = request.getBloodGroup();
-        }
+            // compatible donors, not only the identical blood group
+            donorGroups = DonationRules.names(
+                    DonationRules.donorsFor(request.getBloodGroup()));
 
-        // CASE 2 -> Logged-in user location search
-        else {
+        } else {
 
-            Hospital profile =
-                    hospitalProfileRepository.findByUserEmail(email)
-                            .orElseThrow(() ->
-                                    new UsernameNotFoundException(
-                                            "Hospital profile not found"
-                                    ));
-
-            if (profile.getLocation() == null) {
-                throw new RuntimeException(
-                        "Hospital location not found"
-                );
+            if (hospital.getLocation() == null) {
+                throw new IllegalArgumentException(
+                        "Hospital location not set. Update your hospital profile with latitude and longitude");
             }
 
-            searchLocation = profile.getLocation();
+            searchLocation = hospital.getLocation();
+            donorGroups = DonationRules.allGroupNames();
         }
 
-        double radiusMeters = radiusKm * 1000;
+        List<UserProfile> donors = userProfileRepository.findNearbyDonors(
+                searchLocation,
+                radiusKm * 1000,
+                hospitalUser.getId(),
+                donorGroups,
+                true,   // available only
+                true,   // past cooldown only
+                DonationRules.eligibleBefore(LocalDate.now())
+        );
 
-        List<UserProfile> donors =
-                userProfileRepository.findNearbyDonors(
-                        searchLocation,
-                        radiusMeters,
-                        loggedInUser.getId(),
-                        requiredBloodGroup != null
-                                ? requiredBloodGroup.name()
-                                : null
-                );
+        LocalDate today = LocalDate.now();
+        List<DonarResponseDto> result = new ArrayList<>();
+        boolean anyNewMatch = false;
 
-        BloodRequest finalRequest = request;
-        Point finalSearchLocation = searchLocation;
+        for (UserProfile profile : donors) {
 
-        return donors.stream()
-                .map(profile -> {
+            DonarResponseDto dto = mapToDto(profile, today);
 
-                    DonarResponseDto dto = mapToDto(profile);
+            double distanceKm = calculateDistanceKm(searchLocation, profile.getLocation());
+            dto.setDistanceKm(distanceKm);
 
-                    double distanceKm =
-                            calculateDistanceKm(
-                                    finalSearchLocation,
-                                    profile.getLocation()
-                            );
+            if (request != null && registerMatch(request, profile, distanceKm)) {
+                anyNewMatch = true;
+            }
 
-                    dto.setDistanceKm(distanceKm);
+            result.add(dto);
+        }
 
-                    // Save donor match only for blood requests
-                    if (finalRequest != null) {
+        if (request != null && anyNewMatch && request.getStatus() == RequestStatus.OPEN) {
+            request.setStatus(RequestStatus.MATCHING);
+            request.setUpdatedAt(LocalDateTime.now());
+            bloodRequestRepository.save(request);
+        }
 
-                        boolean exists =
-                                donorRequestMatchRepository
-                                        .existsByRequest_IdAndDonor_Id(
-                                                finalRequest.getId(),
-                                                profile.getUser().getId()
-                                        );
+        return result;
+    }
 
-                        if (!exists) {
+    /** @return true if a new match was created (and the donor notified) */
+    private boolean registerMatch(BloodRequest request, UserProfile profile, double distanceKm) {
 
-                            DonorRequestMatch match = new DonorRequestMatch();
+        if (donorRequestMatchRepository.existsByRequest_IdAndDonor_Id(
+                request.getId(), profile.getUser().getId())) {
+            return false;
+        }
 
-                            match.setRequest(finalRequest);
-                            match.setDonor(profile.getUser());
-                            match.setDistanceKm(distanceKm);
-                            match.setNotifiedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
 
-                            donorRequestMatchRepository.save(match);
-                        }
-                    }
+        DonorRequestMatch match = new DonorRequestMatch();
+        match.setRequest(request);
+        match.setDonor(profile.getUser());
+        match.setDistanceKm(distanceKm);
+        match.setStatus(MatchStatus.NOTIFIED);
+        match.setNotifiedAt(now);
+        donorRequestMatchRepository.save(match);
 
-                    return dto;
-                })
-                .toList();
+        boolean urgent = request.getUrgency() == UrgencyLevel.HIGH
+                || request.getUrgency() == UrgencyLevel.CRITICAL;
+
+        notificationService.createNotification(
+                profile.getUser(),
+                urgent ? "Urgent blood request near you" : "Blood request near you",
+                request.getBloodGroup() + " blood needed at " + request.getHospitalName()
+                        + (request.getCity() != null ? ", " + request.getCity() : "")
+                        + " (" + request.getUnitsRequired() + " unit(s), urgency "
+                        + request.getUrgency() + ").",
+                urgent ? NotificationType.URGENT_REQUEST : NotificationType.SYSTEM
+        );
+
+        return true;
     }
 
     public List<DistrictDonorCountDto> getDonorCountByDistrict() {
@@ -151,8 +202,9 @@ public class DonarService {
         return donors.stream()
                 .map(donor -> {
 
-                    String initials = Arrays.stream(donor.getFullName().split(" "))
-                            .map(word -> String.valueOf(word.charAt(0)))
+                    String initials = Arrays.stream(donor.getFullName().trim().split("\\s+"))
+                            .filter(word -> !word.isEmpty())
+                            .map(word -> word.substring(0, 1).toUpperCase())
                             .collect(Collectors.joining());
 
                     String location = donor.getCity() + ", " + donor.getState();
@@ -164,7 +216,9 @@ public class DonarService {
                     return new DonorTableDto(
                             initials,
                             donor.getFullName(),
-                            donor.getBloodGroup().toString(),
+                            donor.getBloodGroup() != null
+                                    ? donor.getBloodGroup().toString()
+                                    : "Unknown",
                             location,
                             lastDonated,
                             donor.isAvailable()
@@ -178,17 +232,17 @@ public class DonarService {
         Period period = Period.between(donationDate, LocalDate.now());
 
         if (period.getYears() > 0) {
-            return period.getYears() + " years ago";
+            return period.getYears() + (period.getYears() == 1 ? " year ago" : " years ago");
         }
 
         if (period.getMonths() > 0) {
-            return period.getMonths() + " months ago";
+            return period.getMonths() + (period.getMonths() == 1 ? " month ago" : " months ago");
         }
 
-        return period.getDays() + " days ago";
+        return period.getDays() + (period.getDays() == 1 ? " day ago" : " days ago");
     }
 
-    private DonarResponseDto mapToDto(UserProfile profile) {
+    private DonarResponseDto mapToDto(UserProfile profile, LocalDate today) {
 
         DonarResponseDto dto = new DonarResponseDto();
 
@@ -199,6 +253,8 @@ public class DonarService {
         dto.setDistrict(profile.getDistrict());
         dto.setState(profile.getState());
         dto.setAvailable(profile.isAvailable());
+        dto.setEligible(DonationRules.isEligible(profile.getLastDonationDate(), today));
+        dto.setPhone(profile.getPhone());
         dto.setLat(profile.getLat());
         dto.setLon(profile.getLon());
 
@@ -235,99 +291,105 @@ public class DonarService {
         return Math.round(distance * 100.0) / 100.0;
     }
 
+    /**
+     * Manual donor search for hospitals. Blood group is an exact filter here
+     * (the hospital explicitly chose it). Deactivated donors never appear.
+     */
     public List<DonarResponseDto> searchDonors(
             String email,
             BloodGroup bloodGroup,
             Double radiusKm,
             String city,
-            Boolean available
+            Boolean available,
+            BloodGroup forRecipient,
+            Double lat,
+            Double lon
     ) {
 
-        Hospital hospital = hospitalProfileRepository
-                .findByUserEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException("Hospital not found"));
+        if (radiusKm != null) {
+            DonationRules.validateRadius(radiusKm);
+        }
 
+        Hospital hospital = requireVerifiedHospital(email);
         Users loggedInUser = hospital.getUser();
 
-        List<UserProfile> donors;
+        // forRecipient = "who can give to a patient of this group" (compatibility);
+        // bloodGroup = exact donor group filter.
+        List<String> groups = forRecipient != null
+                ? DonationRules.names(DonationRules.donorsFor(forRecipient))
+                : bloodGroup != null
+                ? List.of(bloodGroup.name())
+                : DonationRules.allGroupNames();
 
-        // CASE 1 -> Radius search
+        LocalDate today = LocalDate.now();
+
+        List<UserProfile> donors;
+        Point searchLocation = null;
+
         if (radiusKm != null) {
 
-            Hospital loggedInProfile =
-            hospitalProfileRepository.findByUserEmail(email)
-                            .orElseThrow(() ->
-                                    new UsernameNotFoundException(
-                                            "Hospital profile not found"
-                                    ));
+            if (lat != null || lon != null) {
+                // search around any place the hospital picked on the map
+                DonationRules.validateCoordinates(lat, lon);
+                Point p = new GeometryFactory(new PrecisionModel(), 4326)
+                        .createPoint(new Coordinate(lon, lat));
+                p.setSRID(4326);
+                searchLocation = p;
+            } else {
+                searchLocation = hospital.getLocation();
+            }
 
-            Point searchLocation =
-                    loggedInProfile.getLocation();
+            if (searchLocation == null) {
+                throw new IllegalArgumentException(
+                        "Hospital location not set. Update your hospital profile with latitude and longitude");
+            }
 
             donors = userProfileRepository.findNearbyDonors(
                     searchLocation,
                     radiusKm * 1000,
                     loggedInUser.getId(),
-                    bloodGroup != null
-                            ? bloodGroup.name()
-                            : null
+                    groups,
+                    false,  // the "available" filter below decides
+                    false,
+                    DonationRules.eligibleBefore(today)
             );
 
-            return donors.stream()
-
-                    .filter(profile ->
-                            city == null ||
-                                    profile.getCity().equalsIgnoreCase(city)
-                    )
-
-                    .filter(profile ->
-                            available == null ||
-                                    profile.isAvailable() == available
-                    )
-
-                    .map(profile -> {
-
-                        DonarResponseDto dto =
-                                mapToDto(profile);
-
-                        double distanceKm =
-                                calculateDistanceKm(
-                                        searchLocation,
-                                        profile.getLocation()
-                                );
-
-                        dto.setDistanceKm(distanceKm);
-
-                        return dto;
-                    })
-
-                    .toList();
+        } else {
+            donors = userProfileRepository.searchDonorsWithoutRadius(
+                    loggedInUser.getId(),
+                    groups
+            );
         }
 
-        // CASE 2 -> No radius search
-        donors = userProfileRepository
-                .searchDonorsWithoutRadius(
-                        loggedInUser.getId(),
-                        bloodGroup != null
-                                ? bloodGroup.name()
-                                : null
-                );
+        final Point origin = searchLocation;
 
         return donors.stream()
-
                 .filter(profile ->
-                        city == null ||
-                                profile.getCity().equalsIgnoreCase(city)
-                )
-
+                        city == null || profile.getCity().equalsIgnoreCase(city))
                 .filter(profile ->
-                        available == null ||
-                                profile.isAvailable() == available
-                )
-
-                .map(this::mapToDto)
-
+                        available == null || profile.isAvailable() == available)
+                .map(profile -> {
+                    DonarResponseDto dto = mapToDto(profile, today);
+                    if (origin != null) {
+                        dto.setDistanceKm(calculateDistanceKm(origin, profile.getLocation()));
+                    }
+                    return dto;
+                })
                 .toList();
+    }
+
+    private Hospital requireVerifiedHospital(String email) {
+
+        Hospital hospital = hospitalProfileRepository
+                .findByUserEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Hospital profile not found"));
+
+        if (!hospital.isVerifiedByAdmin()) {
+            throw new BusinessRuleException(HttpStatus.FORBIDDEN,
+                    "Your hospital must be verified by an admin before contacting donors");
+        }
+
+        return hospital;
     }
 }

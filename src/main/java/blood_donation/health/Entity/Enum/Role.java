@@ -4,4 +4,4 @@ public enum Role {
     DONOR,
     HOSPITAL,
     ADMIN
-}
+}

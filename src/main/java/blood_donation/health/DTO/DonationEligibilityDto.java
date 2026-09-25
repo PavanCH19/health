@@ -10,4 +10,4 @@ public class DonationEligibilityDto {
     private boolean eligible;
 
     private long daysUntilEligible;
-}
+}

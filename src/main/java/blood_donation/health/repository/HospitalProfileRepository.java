@@ -15,4 +15,8 @@ public interface HospitalProfileRepository extends JpaRepository<Hospital, Long>
 
     List<Hospital> findByVerifiedByAdminFalse();
 
-}
+    List<Hospital> findByVerifiedByAdminFalseAndUser_ActiveTrue();
+
+    boolean existsByLicenseNumber(String licenseNumber);
+
+}

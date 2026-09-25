@@ -20,4 +20,4 @@ public class NearbyRequestDto {
     private UrgencyLevel urgency;
 
     private double distanceKm;
-}
+}

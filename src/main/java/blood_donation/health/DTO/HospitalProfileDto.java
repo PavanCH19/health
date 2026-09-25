@@ -30,4 +30,7 @@ public class HospitalProfileDto {
     private Double lat;
 
     private Double lon;
-}
+
+    // response only - ignored when the client sends it
+    private boolean verifiedByAdmin;
+}

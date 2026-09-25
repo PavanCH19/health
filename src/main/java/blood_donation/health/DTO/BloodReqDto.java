@@ -14,8 +14,10 @@ import java.time.LocalDateTime;
 @Getter @Setter
 public class BloodReqDto {
 
-    // User ID who created the request
-    @NotNull(message = "Requested user ID is required")
+    // Response only: request id (needed by clients to update status / find donors)
+    private Long id;
+
+    // Response only: the requester is always taken from the logged-in user
     private Long requestedById;
 
     @NotNull(message = "Blood group is required")

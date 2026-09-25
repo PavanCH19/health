@@ -21,4 +21,4 @@ public class NotificationDto {
     private boolean read;
 
     private LocalDateTime createdAt;
-}
+}

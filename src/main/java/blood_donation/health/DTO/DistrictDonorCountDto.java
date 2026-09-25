@@ -8,4 +8,4 @@ import lombok.Data;
 public class DistrictDonorCountDto {
     private String district;
     private Long donorCount;
-}
+}

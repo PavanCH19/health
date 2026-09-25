@@ -9,6 +9,7 @@ import blood_donation.health.service.DonarService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,16 +26,20 @@ public class DonorSearchController {
     private final DonarService donorService;
 
     @GetMapping("/search")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<List<DonarResponseDto>>> searchBloodReq(
             @RequestParam(required = false) BloodGroup bloodGroup,
             @RequestParam(required = false) Double radiusKm,
             @RequestParam(required = false) String city,
             @RequestParam(required = false) Boolean available,
+            @RequestParam(required = false) BloodGroup forRecipient,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lon,
             Authentication authentication
     ){
 
         String email = authentication.getName();
-        List<DonarResponseDto> availableDonors = donorService.searchDonors(email, bloodGroup, radiusKm, city, available);
+        List<DonarResponseDto> availableDonors = donorService.searchDonors(email, bloodGroup, radiusKm, city, available, forRecipient, lat, lon);
 
         return ResponseEntity
                 .status(HttpStatus.OK)
@@ -55,6 +60,7 @@ public class DonorSearchController {
     }
 
     @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('HOSPITAL', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<DonorTableDto>>> getAllDonors() {
 
         return ResponseEntity.ok(

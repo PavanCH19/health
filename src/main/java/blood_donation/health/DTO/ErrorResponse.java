@@ -20,4 +20,4 @@ public class ErrorResponse {
     private String message;
     private String path;
     private Map<String, String> fieldErrors; // only present for validation errors
-}
+}

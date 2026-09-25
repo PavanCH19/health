@@ -39,4 +39,10 @@ public class NearbyBloodRequestDto {
     private double distanceKm;
 
     private LocalDateTime createdAt;
-}
+
+    private String contactName;
+
+    private String contactPhone;
+
+    private LocalDateTime requiredBefore;
+}

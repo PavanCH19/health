@@ -53,4 +53,4 @@ public class Donation {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
-}
+}

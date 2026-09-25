@@ -24,4 +24,4 @@ public class DonorDashboardDto {
     private List<NotificationDto> notifications;
 
     private LocalDateTime createdAt;
-}
+}

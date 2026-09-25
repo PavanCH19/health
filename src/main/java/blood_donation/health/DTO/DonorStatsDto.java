@@ -12,4 +12,4 @@ public class DonorStatsDto {
     private long availableDonors;
 
     private long matchedDonors;
-}
+}

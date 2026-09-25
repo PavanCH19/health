@@ -13,4 +13,4 @@ public enum BloodGroup {
 
     O_POS,
     O_NEG
-}
+}

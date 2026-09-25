@@ -6,4 +6,4 @@ public enum NotificationType {
     REQUEST_ACCEPTED,
     DONATION_REMINDER,
     SYSTEM
-}
+}

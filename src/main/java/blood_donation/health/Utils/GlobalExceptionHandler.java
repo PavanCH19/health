@@ -122,6 +122,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRule(
+            BusinessRuleException ex, HttpServletRequest request) {
+        return buildResponse(ex.getStatus(), "Business Rule Violation", ex.getMessage(), request);
+    }
+
     // ─── Access denied ────────────────────────────────────────────────────────
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(
@@ -172,4 +178,4 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(status).body(response);
     }
-}
+}

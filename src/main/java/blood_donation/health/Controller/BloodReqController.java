@@ -8,9 +8,11 @@ import blood_donation.health.Entity.Enum.BloodGroup;
 import blood_donation.health.Entity.Enum.RequestStatus;
 import blood_donation.health.service.BloodRequestService;
 import blood_donation.health.service.DonarService;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,8 +28,9 @@ public class BloodReqController {
     private final DonarService donorService;
 
     @PostMapping
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<Map<String, Long>>> request(
-            @RequestBody BloodReqDto bloodReqDto,
+            @Valid @RequestBody BloodReqDto bloodReqDto,
             Authentication authentication) {
 
         String email = authentication.getName();
@@ -42,6 +45,7 @@ public class BloodReqController {
     }
 
     @GetMapping("/nearby")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<List<DonarResponseDto>>> nearByDonar(
             @RequestParam double radiusKm,
             @RequestParam(required = false) Long bloodReqId,
@@ -61,6 +65,7 @@ public class BloodReqController {
     }
 
     @GetMapping("/my")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<List<BloodReqDto>>> myBloodReq(Authentication authentication) {
 
         String email = authentication.getName();
@@ -72,6 +77,7 @@ public class BloodReqController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<Void>> bloodReqStatus(
             @PathVariable Long id,
             @RequestParam RequestStatus status,
@@ -95,6 +101,7 @@ public class BloodReqController {
     }
 
     @GetMapping("/nearby-requests")
+    @PreAuthorize("hasRole('DONOR')")
     public ResponseEntity<
             ApiResponse<List<NearbyBloodRequestDto>>
             > nearbyRequests(
@@ -118,4 +125,4 @@ public class BloodReqController {
                 )
         );
     }
-}
+}

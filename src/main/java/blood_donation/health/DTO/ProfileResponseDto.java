@@ -22,6 +22,8 @@ public class ProfileResponseDto {
     private LocalDate birthDate;
     private double lat;
     private double lng;
+    private boolean available;
+    private LocalDate lastDonationDate;
     private LocalDateTime createdAt;
 }
 
@@ -222,4 +224,4 @@ public class ProfileResponseDto {
 //        }
 //        ]
 //        }
-//        }
+//        }

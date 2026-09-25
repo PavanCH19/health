@@ -24,6 +24,12 @@ public class DonarResponseDto {
 
     private Boolean available;
 
+    // false while the donor is inside the post-donation cooldown
+    private Boolean eligible;
+
+    // only returned by endpoints restricted to verified hospitals
+    private String phone;
+
     private Double lat;
 
     private Double lon;

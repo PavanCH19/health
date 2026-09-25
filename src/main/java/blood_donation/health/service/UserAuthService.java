@@ -3,11 +3,13 @@ package blood_donation.health.service;
 import blood_donation.health.DTO.RegisterDto;
 import blood_donation.health.Entity.Enum.Role;
 import blood_donation.health.Entity.Users;
+import blood_donation.health.Utils.BusinessRuleException;
 import blood_donation.health.Utils.JwtUtil;
 import blood_donation.health.Utils.UserAlreadyExistsException;
 import blood_donation.health.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.*;
@@ -63,6 +65,7 @@ public class UserAuthService implements UserDetailsService {
 
         Map<String, String> response = new HashMap<>();
         response.put("token", token);
+        response.put("role", role);
 
         return response;
     }
@@ -79,6 +82,17 @@ public class UserAuthService implements UserDetailsService {
             throw new UserAlreadyExistsException(
                     "User already exists with email: " + request.getEmail()
             );
+        }
+
+        if (request.getRole() == null) {
+            throw new IllegalArgumentException("Role is required");
+        }
+
+        // Privilege escalation guard: ADMIN can never be self-assigned
+        if (request.getRole() == Role.ADMIN) {
+            throw new BusinessRuleException(
+                    HttpStatus.FORBIDDEN,
+                    "Admin accounts cannot be created through public registration");
         }
 
         Set<Role> roles = new HashSet<>();
@@ -101,4 +115,4 @@ public class UserAuthService implements UserDetailsService {
 
         return "Registered Successfully";
     }
-}
+}

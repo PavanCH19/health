@@ -34,4 +34,4 @@ public class AuditLog {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
-}
+}

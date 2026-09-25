@@ -13,4 +13,4 @@ public class DonorTableDto {
     private String location;
     private String lastDonated;
     private boolean available;
-}
+}

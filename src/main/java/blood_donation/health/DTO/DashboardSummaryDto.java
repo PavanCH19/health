@@ -10,4 +10,4 @@ public class DashboardSummaryDto {
     private long activeRequests;
 
     private long availableDonorsNearby;
-}
+}

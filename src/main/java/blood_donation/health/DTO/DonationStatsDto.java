@@ -10,4 +10,4 @@ public class DonationStatsDto {
     private long totalDonations;
 
     private long livesSaved;
-}
+}

@@ -6,4 +6,4 @@ public enum MatchStatus {
     ACCEPTED,
     REJECTED,
     COMPLETED
-}
+}

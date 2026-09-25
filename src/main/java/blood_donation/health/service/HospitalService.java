@@ -3,15 +3,20 @@ package blood_donation.health.service;
 import blood_donation.health.DTO.HospitalProfileDto;
 import blood_donation.health.Entity.Hospital;
 import blood_donation.health.Entity.Users;
+import blood_donation.health.Utils.DonationRules;
 import blood_donation.health.Utils.UserAlreadyExistsException;
 import blood_donation.health.repository.HospitalProfileRepository;
 import blood_donation.health.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
-import org.modelmapper.convention.MatchingStrategies;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -20,14 +25,9 @@ public class HospitalService {
 
     private final HospitalProfileRepository hospitalProfileRepository;
     private final UserRepository userRepository;
+    private final BloodRequestService bloodRequestService;
 
-    // PATCH mapper → skips null values automatically
-    private final ModelMapper patchMapper = new ModelMapper();
-    {
-        patchMapper.getConfiguration()
-                .setMatchingStrategy(MatchingStrategies.STRICT)
-                .setSkipNullEnabled(true);
-    }
+    private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     public void completeHospitalDetails(
             String email,
@@ -35,22 +35,35 @@ public class HospitalService {
     ) {
         Users user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found: " + email
-                        ));
+                        new UsernameNotFoundException("User not found: " + email));
 
-        // Check existing profile
         if (hospitalProfileRepository.findByUser(user).isPresent()) {
-            throw new UserAlreadyExistsException(
-                    "Hospital profile already exists"
-            );
+            throw new UserAlreadyExistsException("Hospital profile already exists");
+        }
+
+        // location drives donor search, so it is mandatory
+        DonationRules.validateCoordinates(dto.getLat(), dto.getLon());
+
+        String license = normalize(dto.getLicenseNumber());
+        if (license != null && hospitalProfileRepository.existsByLicenseNumber(license)) {
+            throw new UserAlreadyExistsException("License number already registered");
         }
 
         Hospital hospital = new Hospital();
 
-        mapDtoToEntity(dto, hospital);
+        hospital.setHospitalName(dto.getHospitalName().trim());
+        hospital.setLicenseNumber(license);
+        hospital.setEmergencyContact(dto.getEmergencyContact());
+        hospital.setWebsite(dto.getWebsite());
+        hospital.setCity(dto.getCity());
+        hospital.setDistrict(dto.getDistrict());
+        hospital.setState(dto.getState());
+        hospital.setAddressLine(dto.getAddressLine());
+        setLocation(dto.getLat(), dto.getLon(), hospital);
 
-        // Relationship mapping
+        // every new hospital must be verified by an admin
+        hospital.setVerifiedByAdmin(false);
+
         hospital.setUser(user);
 
         hospitalProfileRepository.save(hospital);
@@ -62,64 +75,101 @@ public class HospitalService {
         Hospital hospital = hospitalProfileRepository
                 .findByUserEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "Hospital profile not found"
-                        ));
+                        new UsernameNotFoundException("Hospital profile not found"));
 
         return mapEntityToDto(hospital);
     }
-
 
     public String updateHospitalProfile(
             String email,
             HospitalProfileDto dto
     ) {
 
-        Users user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found"
-                        ));
-
         Hospital hospital = hospitalProfileRepository
-                .findByUser(user)
+                .findByUserEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "Hospital profile not found"
-                        ));
+                        new UsernameNotFoundException("Hospital profile not found"));
 
-        // Auto skips null values
-        patchMapper.map(dto, hospital);
+        boolean identityChanged = false;
+
+        if (dto.getHospitalName() != null) {
+            if (dto.getHospitalName().isBlank()) {
+                throw new IllegalArgumentException("Hospital name cannot be blank");
+            }
+            String name = dto.getHospitalName().trim();
+            identityChanged |= !name.equals(hospital.getHospitalName());
+            hospital.setHospitalName(name);
+        }
+
+        if (dto.getLicenseNumber() != null) {
+            String license = normalize(dto.getLicenseNumber());
+            if (!Objects.equals(license, hospital.getLicenseNumber())) {
+                if (license != null && hospitalProfileRepository.existsByLicenseNumber(license)) {
+                    throw new UserAlreadyExistsException("License number already registered");
+                }
+                identityChanged = true;
+                hospital.setLicenseNumber(license);
+            }
+        }
+
+        if (dto.getEmergencyContact() != null) hospital.setEmergencyContact(dto.getEmergencyContact());
+        if (dto.getWebsite() != null) hospital.setWebsite(dto.getWebsite());
+        if (dto.getCity() != null) hospital.setCity(dto.getCity());
+        if (dto.getDistrict() != null) hospital.setDistrict(dto.getDistrict());
+        if (dto.getState() != null) hospital.setState(dto.getState());
+        if (dto.getAddressLine() != null) hospital.setAddressLine(dto.getAddressLine());
+
+        if (dto.getLat() != null || dto.getLon() != null) {
+            // keep lat/lon and the PostGIS point in sync
+            DonationRules.validateCoordinates(dto.getLat(), dto.getLon());
+            setLocation(dto.getLat(), dto.getLon(), hospital);
+        }
+
+        // changing name / license invalidates the admin's earlier verification
+        if (identityChanged) {
+            hospital.setVerifiedByAdmin(false);
+        }
+
         hospitalProfileRepository.save(hospital);
 
-        return "Hospital profile updated successfully";
+        return identityChanged
+                ? "Hospital profile updated. Re-verification by an admin is required"
+                : "Hospital profile updated successfully";
     }
 
     public String deleteHospitalProfile(String email) {
 
         Users user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found"
-                        ));
+                        new UsernameNotFoundException("User not found"));
 
         Hospital hospital = hospitalProfileRepository
                 .findByUser(user)
                 .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "Hospital profile not found"
-                        ));
+                        new UsernameNotFoundException("Hospital profile not found"));
 
-        // soft deactivate hospital
         hospital.setVerifiedByAdmin(false);
-
-        // deactivate account
         user.setActive(false);
 
         hospitalProfileRepository.save(hospital);
         userRepository.save(user);
 
+        // don't leave open requests pointing donors to a closed account
+        bloodRequestService.cancelActiveRequestsOf(user.getId());
+
         return "Hospital account deactivated successfully";
+    }
+
+    private void setLocation(Double lat, Double lon, Hospital hospital) {
+        hospital.setLat(lat);
+        hospital.setLon(lon);
+        Point point = geometryFactory.createPoint(new Coordinate(lon, lat));
+        point.setSRID(4326);
+        hospital.setLocation(point);
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private HospitalProfileDto mapEntityToDto(Hospital hospital) {
@@ -138,33 +188,8 @@ public class HospitalService {
 
         dto.setLat(hospital.getLat());
         dto.setLon(hospital.getLon());
+        dto.setVerifiedByAdmin(hospital.isVerifiedByAdmin());
 
         return dto;
-    }
-
-    private void mapDtoToEntity(
-            HospitalProfileDto dto,
-            Hospital hospital
-    ) {
-
-        hospital.setHospitalName(dto.getHospitalName());
-        hospital.setLicenseNumber(dto.getLicenseNumber());
-        hospital.setEmergencyContact(dto.getEmergencyContact());
-        hospital.setWebsite(dto.getWebsite());
-
-        hospital.setCity(dto.getCity());
-        hospital.setDistrict(dto.getDistrict());
-        hospital.setState(dto.getState());
-        hospital.setAddressLine(dto.getAddressLine());
-
-        if (dto.getLat() != null) {
-            hospital.setLat(dto.getLat());
-        }
-
-        if (dto.getLon() != null) {
-            hospital.setLon(dto.getLon());
-        }
-
-        hospital.setVerifiedByAdmin(false);
     }
 }

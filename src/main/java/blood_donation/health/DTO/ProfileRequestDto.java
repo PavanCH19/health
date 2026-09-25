@@ -19,4 +19,5 @@ public class ProfileRequestDto {
     private LocalDate birthDate;
     private Double lat;
     private Double lon;
-}
+    private Boolean available;
+}

@@ -4,16 +4,18 @@ import blood_donation.health.DTO.ProfileRequestDto;
 import blood_donation.health.DTO.ProfileResponseDto;
 import blood_donation.health.Entity.UserProfile;
 import blood_donation.health.Entity.Users;
+import blood_donation.health.Utils.BusinessRuleException;
+import blood_donation.health.Utils.DonationRules;
 import blood_donation.health.Utils.UserAlreadyExistsException;
 import blood_donation.health.repository.UserProfileRepository;
 import blood_donation.health.repository.UserRepository;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
-import org.modelmapper.ModelMapper;
-import org.modelmapper.convention.MatchingStrategies;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
@@ -21,25 +23,12 @@ import java.time.LocalDateTime;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ProfileService {
 
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-
-    // ModelMapper configured to skip null fields (perfect for PATCH)
-    private final ModelMapper patchMapper;
-
-    public ProfileService(UserProfileRepository userProfileRepository,
-                          UserRepository userRepository) {
-        this.userProfileRepository = userProfileRepository;
-        this.userRepository = userRepository;
-
-        this.patchMapper = new ModelMapper();
-        patchMapper.getConfiguration()
-                .setMatchingStrategy(MatchingStrategies.STRICT)
-                .setSkipNullEnabled(true); // ← this replaces all the if-else null checks
-    }
 
     // ─── CREATE ───────────────────────────────────────────────────────────────
     public void completeProfile(ProfileRequestDto dto, String email) {
@@ -47,10 +36,10 @@ public class ProfileService {
         Users user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
+        validateForCreate(dto);
+
         if (userProfileRepository.existsByPhone(dto.getPhone())) {
-            throw new UserAlreadyExistsException(
-                    "Phone number already registered"
-            );
+            throw new UserAlreadyExistsException("Phone number already registered");
         }
 
         if (user.getProfile() != null) {
@@ -59,6 +48,7 @@ public class ProfileService {
 
         UserProfile profile = new UserProfile();
         mapDtoToEntity(dto, profile);
+        profile.setAvailable(dto.getAvailable() == null || dto.getAvailable());
         profile.setUser(user);
         user.setProfile(profile);
 
@@ -79,42 +69,16 @@ public class ProfileService {
     public String updateProfile(ProfileRequestDto dto, String email) {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found: " + email
-                        )
-                );
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
         UserProfile profile = user.getProfile();
 
         if (profile == null) {
             throw new UsernameNotFoundException(
-                    "Profile not found. Please complete your profile first."
-            );
+                    "Profile not found. Please complete your profile first.");
         }
 
-        // Auto-map non-null fields
-        patchMapper.map(dto, profile);
-
-        // Update PostGIS location point separately
-        if (dto.getLat() != null && dto.getLon() != null) {
-
-            profile.setLat(dto.getLat());
-            profile.setLon(dto.getLon());
-
-            GeometryFactory geometryFactory = new GeometryFactory();
-
-            Point point = geometryFactory.createPoint(
-                    new Coordinate(
-                            dto.getLon(), // X = longitude
-                            dto.getLat()  // Y = latitude
-                    )
-            );
-
-            point.setSRID(4326);
-
-            profile.setLocation(point);
-        }
+        applyPatch(dto, profile);
 
         profile.setUpdatedAt(LocalDateTime.now());
 
@@ -123,16 +87,18 @@ public class ProfileService {
         return "Profile updated successfully";
     }
 
-    // ─── DELETE ───────────────────────────────────────────────────────────────
+    // ─── DELETE (soft) ────────────────────────────────────────────────────────
     public String deleteProfile(String email) {
 
         Users user = userRepository.findByEmail(email)
-                .orElseThrow(() ->
-                        new UsernameNotFoundException(
-                                "User not found: " + email
-                        ));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
         user.setActive(false);
+
+        // a deactivated donor must never show up in searches / matching
+        if (user.getProfile() != null) {
+            user.getProfile().setAvailable(false);
+        }
 
         userRepository.save(user);
 
@@ -143,28 +109,110 @@ public class ProfileService {
     // PRIVATE HELPERS
     // =========================================================================
 
-    // Full mapping for CREATE (all fields required)
+    private void validateForCreate(ProfileRequestDto dto) {
+
+        requireText(dto.getName(), "Full name");
+        requireText(dto.getPhone(), "Phone");
+        requireText(dto.getCity(), "City");
+        requireText(dto.getDistrict(), "District");
+        requireText(dto.getState(), "State");
+
+        if (dto.getBloodGroup() == null) {
+            throw new IllegalArgumentException("Blood group is required");
+        }
+
+        DonationRules.validateDonorAge(dto.getBirthDate());
+        DonationRules.validateCoordinates(dto.getLat(), dto.getLon());
+    }
+
+    private void requireText(String value, String label) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(label + " is required");
+        }
+    }
+
+    // Full mapping for CREATE
     private void mapDtoToEntity(ProfileRequestDto dto, UserProfile profile) {
-        profile.setFullName(dto.getName());
-        profile.setPhone(dto.getPhone());
-        profile.setCity(dto.getCity());
-        profile.setDistrict(dto.getDistrict());
+        profile.setFullName(dto.getName().trim());
+        profile.setPhone(dto.getPhone().trim());
+        profile.setCity(dto.getCity().trim());
+        profile.setDistrict(dto.getDistrict().trim());
         profile.setVillage(dto.getVillage());
-        profile.setState(dto.getState());
+        profile.setState(dto.getState().trim());
         profile.setBloodGroup(dto.getBloodGroup());
         profile.setDateOfBirth(dto.getBirthDate());
         setLocation(dto.getLat(), dto.getLon(), profile);
     }
 
-    // Only updates location when both lat and lon are explicitly provided
-    private void updateLocationIfProvided(ProfileRequestDto dto, UserProfile profile) {
-        if (dto.getLat() != null && dto.getLon() != null) {
+    /**
+     * PATCH: only non-null fields are applied. Done explicitly because the
+     * DTO's names (name, birthDate) differ from the entity's (fullName,
+     * dateOfBirth) - a generic mapper silently skipped those two.
+     */
+    private void applyPatch(ProfileRequestDto dto, UserProfile profile) {
+
+        if (dto.getName() != null) {
+            requireText(dto.getName(), "Full name");
+            profile.setFullName(dto.getName().trim());
+        }
+
+        if (dto.getPhone() != null) {
+            requireText(dto.getPhone(), "Phone");
+            String phone = dto.getPhone().trim();
+            if (!phone.equals(profile.getPhone())) {
+                if (userProfileRepository.existsByPhone(phone)) {
+                    throw new UserAlreadyExistsException("Phone number already registered");
+                }
+                profile.setPhone(phone);
+            }
+        }
+
+        if (dto.getCity() != null) {
+            requireText(dto.getCity(), "City");
+            profile.setCity(dto.getCity().trim());
+        }
+
+        if (dto.getDistrict() != null) {
+            requireText(dto.getDistrict(), "District");
+            profile.setDistrict(dto.getDistrict().trim());
+        }
+
+        if (dto.getState() != null) {
+            requireText(dto.getState(), "State");
+            profile.setState(dto.getState().trim());
+        }
+
+        if (dto.getVillage() != null) {
+            profile.setVillage(dto.getVillage());
+        }
+
+        if (dto.getBloodGroup() != null && dto.getBloodGroup() != profile.getBloodGroup()) {
+            // blood group is medical fact used for matching - lock it once donations exist
+            if (profile.getBloodGroup() != null && profile.getLastDonationDate() != null) {
+                throw new BusinessRuleException(HttpStatus.CONFLICT,
+                        "Blood group cannot be changed after a donation has been recorded");
+            }
+            profile.setBloodGroup(dto.getBloodGroup());
+        }
+
+        if (dto.getBirthDate() != null) {
+            DonationRules.validateDonorAge(dto.getBirthDate());
+            profile.setDateOfBirth(dto.getBirthDate());
+        }
+
+        if (dto.getAvailable() != null) {
+            profile.setAvailable(dto.getAvailable());
+        }
+
+        if (dto.getLat() != null || dto.getLon() != null) {
+            // location is only updated when both values are supplied
+            DonationRules.validateCoordinates(dto.getLat(), dto.getLon());
             setLocation(dto.getLat(), dto.getLon(), profile);
         }
     }
 
     private void setLocation(Double lat, Double lon, UserProfile profile) {
-        if (lat == null || lon == null) return;
+        DonationRules.validateCoordinates(lat, lon);
         profile.setLat(lat);
         profile.setLon(lon);
         Point point = geometryFactory.createPoint(new Coordinate(lon, lat));
@@ -187,6 +235,8 @@ public class ProfileService {
         dto.setCreatedAt(profile.getCreatedAt());
         dto.setLat(profile.getLat());
         dto.setLng(profile.getLon());
+        dto.setAvailable(profile.isAvailable());
+        dto.setLastDonationDate(profile.getLastDonationDate());
         return dto;
     }
 }

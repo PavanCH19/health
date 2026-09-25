@@ -20,4 +20,4 @@ public class AdminHospitalDto {
     private boolean verifiedByAdmin;
 
     private String email;
-}
+}

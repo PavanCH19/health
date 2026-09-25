@@ -6,6 +6,7 @@ import blood_donation.health.DTO.HospitalDashboardDto;
 import blood_donation.health.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +19,7 @@ public class DashboardController {
 
     // DONOR DASHBOARD
     @GetMapping("/donor")
+    @PreAuthorize("hasRole('DONOR')")
     public ResponseEntity<ApiResponse<DonorDashboardDto>>
     donorDashboard(
             Authentication authentication
@@ -35,6 +37,7 @@ public class DashboardController {
 
     // HOSPITAL DASHBOARD
     @GetMapping("/hospital")
+    @PreAuthorize("hasRole('HOSPITAL')")
     public ResponseEntity<ApiResponse<HospitalDashboardDto>>
     hospitalDashboard(
             Authentication authentication
@@ -49,4 +52,4 @@ public class DashboardController {
                 )
         );
     }
-}
+}

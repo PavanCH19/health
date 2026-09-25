@@ -6,4 +6,4 @@ public enum RequestStatus {
     MATCHING,
     FULFILLED,
     CANCELLED
-}
+}
