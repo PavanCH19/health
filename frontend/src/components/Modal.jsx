@@ -1,0 +1,18 @@
+import { useEffect } from 'react';
+
+export default function Modal({ title, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="panel-head"><h2>{title}</h2><button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
